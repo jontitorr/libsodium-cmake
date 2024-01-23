@@ -17,9 +17,10 @@ option(
     "Enable this switch only if /dev/urandom is totally broken on the target platform"
     OFF
 )
+option(SODIUM_INSTALL "Enable installation" ON)
 
 add_library(
-    ${PROJECT_NAME}
+    sodium
     libsodium/src/libsodium/crypto_aead/aes256gcm/aesni/aead_aes256gcm_aesni.c
     libsodium/src/libsodium/crypto_aead/chacha20poly1305/sodium/aead_chacha20poly1305.c
     libsodium/src/libsodium/crypto_aead/xchacha20poly1305/sodium/aead_xchacha20poly1305.c
@@ -238,7 +239,7 @@ add_library(
 
 if(NOT SODIUM_MINIMAL)
     target_sources(
-        ${PROJECT_NAME}
+        sodium
         PRIVATE
             libsodium/src/libsodium/crypto_box/curve25519xchacha20poly1305/box_curve25519xchacha20poly1305.c
             libsodium/src/libsodium/crypto_box/curve25519xchacha20poly1305/box_seal_curve25519xchacha20poly1305.c
@@ -266,18 +267,19 @@ if(NOT SODIUM_MINIMAL)
     )
 endif()
 
-set_target_properties(${PROJECT_NAME} PROPERTIES C_STANDARD 99)
+set_target_properties(sodium PROPERTIES C_STANDARD 99)
 
 target_include_directories(
-    ${PROJECT_NAME}
+    sodium
     PUBLIC
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/libsodium/src/libsodium/include>
+        $<INSTALL_INTERFACE:include>
     PRIVATE
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/libsodium/src/libsodium/include/sodium>
 )
 
 target_compile_definitions(
-    ${PROJECT_NAME}
+    sodium
     PUBLIC $<$<NOT:$<BOOL:${BUILD_SHARED_LIBS}>>:SODIUM_STATIC>
            $<$<BOOL:${SODIUM_MINIMAL}>:SODIUM_LIBRARY_MINIMAL>
     PRIVATE CONFIGURED
@@ -303,4 +305,50 @@ configure_file(
 if(NOT SODIUM_DISABLE_TESTS)
     enable_testing()
     add_subdirectory(test)
+endif()
+
+if(SODIUM_INSTALL)
+    include(GNUInstallDirs)
+
+    install(
+        TARGETS sodium
+        EXPORT sodiumTargets
+        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        INCLUDES
+        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+        PUBLIC_HEADER DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+    )
+
+    install(
+        EXPORT sodiumTargets
+        FILE sodiumTargets.cmake
+        NAMESPACE sodium::
+        DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/sodium
+    )
+
+    install(
+        DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/libsodium/src/libsodium/include/
+        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+    )
+
+    include(CMakePackageConfigHelpers)
+
+    write_basic_package_version_file(
+        sodiumConfigVersion.cmake
+        VERSION ${VERSION}
+        COMPATIBILITY SameMajorVersion
+    )
+
+    configure_package_config_file(
+        ${CMAKE_CURRENT_SOURCE_DIR}/cmake/Config.cmake.in
+        ${CMAKE_CURRENT_BINARY_DIR}/sodiumConfig.cmake
+        INSTALL_DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/sodium
+    )
+
+    install(FILES ${CMAKE_CURRENT_BINARY_DIR}/sodiumConfig.cmake
+                  ${CMAKE_CURRENT_BINARY_DIR}/sodiumConfigVersion.cmake
+            DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/sodium
+    )
 endif()
